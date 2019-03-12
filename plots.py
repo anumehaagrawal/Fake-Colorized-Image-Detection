@@ -4,6 +4,8 @@ import os
 import pandas as pd
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import GridSearchCV
+
 def hue_equalized(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv],[0],None,[200],[0,256])
@@ -61,6 +63,9 @@ def calculating_v_values():
     hue_fake,hue_true,sat_fake,sat_true = hue_sat_calculation()
     vh_harray = []
     vh_sarray = []
+    max_hue = -99999
+    max_sat = -99999
+    
     for img in range(len(hue_fake)):
         
         f1_h = -99999
@@ -70,8 +75,12 @@ def calculating_v_values():
         per_image_vec = []
         vh_h = -1
         vh_s = -1
+        
         for val in range(len(hue_fake[img])):
-           
+            max_hue = max(max_hue,hue_fake[img][val])
+            max_hue = max(max_hue,hue_true[img][val])
+            max_sat = max(max_sat,sat_fake[img][val])
+            max_sat = max(max_sat,sat_true[img][val])
             if(val + 1 != len(hue_fake[img])):
                 f2_h = f2_h + abs(abs(hue_fake[img][val+1]-hue_true[img][val+1]) - abs(hue_fake[img][val]-hue_true[img][val]))
                 f2_s = f2_s + abs(abs(sat_fake[img][val+1]-sat_true[img][val+1]) - abs(sat_fake[img][val]-sat_true[img][val]))
@@ -91,10 +100,10 @@ def calculating_v_values():
     vhs_map = max(map(lambda val: (vh_sarray.count(val), val), set(vh_sarray)))
     vh_s = vhs_map[1]
 
-    return vh_h,vh_s
+    return vh_h,vh_s,max_hue,max_sat
 
 def train_fcid_hist():
-    vh_h , vh_s = calculating_v_values()
+    vh_h , vh_s,max_hue,max_sat = calculating_v_values()
     hue_fake,hue_true,sat_fake,sat_true = hue_sat_calculation()
     training_set = []
     for img in range(len(hue_fake)):
@@ -109,10 +118,10 @@ def train_fcid_hist():
             if(i+1 != len(hue_true[img])):
                 f2_h = f2_h + abs(hue_true[img][i+1]-hue_true[img][i])
                 f2_s = f2_s + abs(sat_true[img][i+1]-sat_true[img][i])
-        true_image.append(f1_h[0])
-        true_image.append(f1_s[0])
-        true_image.append(f2_h[0])
-        true_image.append(f2_s[0])
+        true_image.append(f1_h[0]/max_hue)
+        true_image.append(f1_s[0]/max_sat)
+        true_image.append(f2_h[0]/max_hue)
+        true_image.append(f2_s[0]/max_sat)
         true_image.append(1)
 
         #Second for fake images
@@ -124,10 +133,10 @@ def train_fcid_hist():
             if(i+1 != len(hue_fake[img])):
                 f2_h = f2_h + abs(hue_fake[img][i+1]-hue_fake[img][i])
                 f2_s = f2_s + abs(sat_fake[img][i+1]-sat_fake[img][i])
-        fake_image.append(f1_h[0])
-        fake_image.append(f1_s[0])
-        fake_image.append(f2_h[0])
-        fake_image.append(f2_s[0])
+        fake_image.append(f1_h[0]/max_hue)
+        fake_image.append(f1_s[0]/max_sat)
+        fake_image.append(f2_h[0]/max_hue)
+        fake_image.append(f2_s[0]/max_sat)
         fake_image.append(0)
         training_set.append(true_image)
         training_set.append(fake_image)
@@ -141,8 +150,12 @@ def training():
     Y = tf.iloc[0:400,4]
     X_test = tf.iloc[400:,0:4]
     Y_test = tf.iloc[400:,4]
-    clf = SVC(gamma='auto')
-    clf.fit(X, Y) 
+    parameters = {'kernel':('linear', 'rbf'), 'C':[1, 10]}
+    svc = SVC(gamma="auto")
+    clf = GridSearchCV(svc, parameters, cv=5) 
+    clf.fit(X,Y)
+    y_pred = clf.predict(X_test)
+    print(y_pred)
     print(clf.score(X_test,Y_test))
     
 
