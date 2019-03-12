@@ -46,24 +46,10 @@ def create_model():
         model.save_weights('model_wieghts.h5')
         model.save('model_keras.h5')
         return model
-        '''
-        output = model.predict(X)
-        for i in range(len(X)):
-        cur = np.zeros((200, 200, 3))
-        cur[:,:,0] = X[i][0][:,:,0]
-        cur[:,:,1:] = output[i][0]
-        cur = (cur * [100, 255, 255]) - [0, 128, 128]
-        rgb_image = lab2rgb(cur)
-        cv2.imwrite('try'+i+'.png',rgb_image)
-
-        '''
 
 
 def test():
         images,_  = load_images_from_folder()
-        '''
-        cnn_approach(images)
-        '''
         X,Y = create_dataset(images)
         model = create_model()
         model.load_weights('model_wieghts.h5')

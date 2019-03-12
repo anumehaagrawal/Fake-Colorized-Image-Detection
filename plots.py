@@ -29,6 +29,28 @@ def saturated_distribution(img):
     hist = cv2.calcHist([hsv],[1],None,[200],[0,256])
     return hist
 
+def dark_channel(image):
+    hist_r = cv2.calcHist([image],[0],None,[200],[0,256])
+    hist_g = cv2.calcHist([image],[1],None,[200],[0,256])
+    hist_b = cv2.calcHist([image],[2],None,[200],[0,256])
+    hist_final = hist_r
+    for i in range(200):
+        hist_final[i] = min(min(hist_r[i],hist_g[i]),hist_b[i])
+    
+    return hist_final
+
+def bright_channel(image):
+    hist_r = cv2.calcHist([image],[0],None,[200],[0,256])
+    hist_g = cv2.calcHist([image],[1],None,[200],[0,256])
+    hist_b = cv2.calcHist([image],[2],None,[200],[0,256])
+    hist_final = hist_r
+    for i in range(200):
+        hist_final[i] = max(max(hist_r[i],hist_g[i]),hist_b[i])
+    
+    return hist_final
+
+
+
 def load_images_from_folder(folder):
     images = []
     names = []
@@ -50,40 +72,55 @@ def hue_sat_calculation():
     hue_true = []
     sat_fake = []
     sat_true = []
+    dc_fake = []
+    dc_true = []
+    bc_fake = []
+    bc_true = []
     for img in range(len(fake_images)):
         hue_true.append(hue_distribution(real_images[img]))
         hue_fake.append(hue_distribution(fake_images[img]))
         sat_true.append(saturated_distribution(real_images[img]))
         sat_fake.append(saturated_distribution(fake_images[img]))
+        dc_fake.append(dark_channel(fake_images[img]))
+        dc_true.append(dark_channel(real_images[img]))
+        bc_fake.append(bright_channel(fake_images[img]))
+        bc_true.append(bright_channel(real_images[img]))
 
-    return hue_fake,hue_true,sat_fake,sat_true
+    return hue_fake,hue_true,sat_fake,sat_true,dc_fake,dc_true, bc_fake, bc_true
 
 def calculating_v_values():
     
-    hue_fake,hue_true,sat_fake,sat_true = hue_sat_calculation()
+    hue_fake,hue_true,sat_fake,sat_true,dc_fake,dc_true,bc_fake, bc_true = hue_sat_calculation()
     vh_harray = []
     vh_sarray = []
+    vdc_array = []
+    vbc_array = []
     max_hue = -99999
     max_sat = -99999
+    max_dc =  -99999
+    max_bc = -99999
     
     for img in range(len(hue_fake)):
         
         f1_h = -99999
         f1_s = -99999
-        f2_h = 0
-        f2_s = 0
+        f1_dc = -99999
+        f1_bc = -99999
         per_image_vec = []
         vh_h = -1
         vh_s = -1
+        vdc = -1
+        vbc = -1
         
         for val in range(len(hue_fake[img])):
             max_hue = max(max_hue,hue_fake[img][val])
             max_hue = max(max_hue,hue_true[img][val])
             max_sat = max(max_sat,sat_fake[img][val])
             max_sat = max(max_sat,sat_true[img][val])
-            if(val + 1 != len(hue_fake[img])):
-                f2_h = f2_h + abs(abs(hue_fake[img][val+1]-hue_true[img][val+1]) - abs(hue_fake[img][val]-hue_true[img][val]))
-                f2_s = f2_s + abs(abs(sat_fake[img][val+1]-sat_true[img][val+1]) - abs(sat_fake[img][val]-sat_true[img][val]))
+            max_dc = max(max_dc,dc_fake[img][val])
+            max_dc = max(max_dc,dc_true[img][val])
+            max_bc = max(max_bc,bc_fake[img][val])
+            max_bc = max(max_bc,bc_true[img][val])
 
             if(abs(hue_fake[img][val]-hue_true[img][val]) > f1_h):
                 f1_h = abs(hue_fake[img][val]-hue_true[img][val])
@@ -92,19 +129,34 @@ def calculating_v_values():
             if(abs(sat_fake[img][val]-sat_true[img][val]) > f1_s):
                 f1_s = abs(sat_fake[img][val]-sat_true[img][val])
                 vh_s = val
+
+            if(abs(dc_fake[img][val]-dc_true[img][val]) > f1_dc):
+                f1_dc = abs(dc_fake[img][val]-dc_true[img][val])
+                vdc = val
+
+            if(abs(bc_fake[img][val]-bc_true[img][val]) > f1_bc):
+                f1_bc = abs(bc_fake[img][val]-bc_true[img][val])
+                vbc = val
         vh_sarray.append(vh_s)
         vh_harray.append(vh_h)
+        vdc_array.append(vdc)
+        vbc_array.append(vbc)
 
     vh_map = max(map(lambda val: (vh_harray.count(val), val), set(vh_harray)))
     vh_h = vh_map[1]
     vhs_map = max(map(lambda val: (vh_sarray.count(val), val), set(vh_sarray)))
     vh_s = vhs_map[1]
+    vdc_map = max(map(lambda val: (vdc_array.count(val), val), set(vdc_array)))
+    vdc = vdc_map[1]
+    vbc_map = max(map(lambda val: (vbc_array.count(val), val), set(vbc_array)))
+    vbc = vbc_map[1]
 
-    return vh_h,vh_s,max_hue,max_sat
+
+    return vh_h,vh_s,vdc, vbc,max_hue,max_sat,max_dc,max_bc
 
 def train_fcid_hist():
-    vh_h , vh_s,max_hue,max_sat = calculating_v_values()
-    hue_fake,hue_true,sat_fake,sat_true = hue_sat_calculation()
+    vh_h , vh_s , vdc ,vbc, max_hue , max_sat, max_dc,max_bc = calculating_v_values()
+    hue_fake,hue_true,sat_fake,sat_true, dc_fake, dc_true , bc_fake, bc_true = hue_sat_calculation()
     training_set = []
     for img in range(len(hue_fake)):
         true_image = []
@@ -112,31 +164,47 @@ def train_fcid_hist():
         #First for true images
         f1_h = hue_true[img][vh_h]
         f1_s = sat_true[img][vh_s]
+        f1_dc = dc_true[img][vdc]
+        f1_bc = bc_true[img][vbc]
         f2_h = 0
         f2_s = 0 
+        f2_dc = 0
+        f2_bc = 0 
         for i in range(len(hue_true[img])):
             if(i+1 != len(hue_true[img])):
                 f2_h = f2_h + abs(hue_true[img][i+1]-hue_true[img][i])
                 f2_s = f2_s + abs(sat_true[img][i+1]-sat_true[img][i])
+                f2_dc = f2_dc + abs(dc_true[img][i+1]-dc_true[img][i])
+                f2_bc = f2_bc + abs(bc_true[img][i+1]-bc_true[img][i])
         true_image.append(f1_h[0]/max_hue)
         true_image.append(f1_s[0]/max_sat)
         true_image.append(f2_h[0]/max_hue)
         true_image.append(f2_s[0]/max_sat)
+        true_image.append(f2_dc[0]/max_dc)
+        true_image.append(f2_bc[0]/max_bc)
         true_image.append(1)
 
         #Second for fake images
         f1_h = hue_fake[img][vh_h]
         f1_s = sat_fake[img][vh_s]
+        f1_dc = dc_fake[img][vdc]
+        f1_bc = bc_fake[img][vbc]
         f2_h = 0
         f2_s = 0 
+        f2_dc = 0
+        f2_bc = 0
         for i in range(len(hue_fake[img])):
             if(i+1 != len(hue_fake[img])):
                 f2_h = f2_h + abs(hue_fake[img][i+1]-hue_fake[img][i])
                 f2_s = f2_s + abs(sat_fake[img][i+1]-sat_fake[img][i])
+                f2_dc = f2_dc + abs(dc_fake[img][i+1]-dc_fake[img][i])
+                f2_bc = f2_bc + abs(bc_fake[img][i+1]-bc_fake[img][i])
         fake_image.append(f1_h[0]/max_hue)
         fake_image.append(f1_s[0]/max_sat)
         fake_image.append(f2_h[0]/max_hue)
         fake_image.append(f2_s[0]/max_sat)
+        fake_image.append(f2_dc[0]/max_dc)
+        fake_image.append(f2_bc[0]/max_bc)
         fake_image.append(0)
         training_set.append(true_image)
         training_set.append(fake_image)
@@ -146,10 +214,11 @@ def train_fcid_hist():
 def training():
     train_array = train_fcid_hist()
     tf = pd.DataFrame(train_array)
-    X = tf.iloc[0:400,0:4]
-    Y = tf.iloc[0:400,4]
-    X_test = tf.iloc[400:,0:4]
-    Y_test = tf.iloc[400:,4]
+    tf.sample(frac=1)
+    X = tf.iloc[0:400,0:6]
+    Y = tf.iloc[0:400,6]
+    X_test = tf.iloc[400:,0:6]
+    Y_test = tf.iloc[400:,6]
     parameters = {'kernel':('linear', 'rbf'), 'C':[1, 10]}
     svc = SVC(gamma="auto")
     clf = GridSearchCV(svc, parameters, cv=5) 
@@ -157,8 +226,6 @@ def training():
     y_pred = clf.predict(X_test)
     print(y_pred)
     print(clf.score(X_test,Y_test))
-    
-
     
 
 training()
