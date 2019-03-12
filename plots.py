@@ -1,7 +1,9 @@
 import cv2
 from matplotlib import pyplot as plt
 import os
-
+import pandas as pd
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
 def hue_equalized(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv],[0],None,[200],[0,256])
@@ -35,8 +37,7 @@ def load_images_from_folder(folder):
                     names.append(fname)
     return images,names
 
-
-def fcid_hist():
+def hue_sat_calculation():
     #No. of bins
     Kh = 200
     folder_fake = 'sun6-gthist'
@@ -53,14 +54,28 @@ def fcid_hist():
         sat_true.append(saturated_distribution(real_images[img]))
         sat_fake.append(saturated_distribution(fake_images[img]))
 
-    training_vec = []
-    for img in range(len(fake_images)):
-        vh_h = -1
-        vh_s = -1
+    return hue_fake,hue_true,sat_fake,sat_true
+
+def calculating_v_values():
+    
+    hue_fake,hue_true,sat_fake,sat_true = hue_sat_calculation()
+    vh_harray = []
+    vh_sarray = []
+    for img in range(len(hue_fake)):
+        
         f1_h = -99999
         f1_s = -99999
+        f2_h = 0
+        f2_s = 0
         per_image_vec = []
+        vh_h = -1
+        vh_s = -1
         for val in range(len(hue_fake[img])):
+           
+            if(val + 1 != len(hue_fake[img])):
+                f2_h = f2_h + abs(abs(hue_fake[img][val+1]-hue_true[img][val+1]) - abs(hue_fake[img][val]-hue_true[img][val]))
+                f2_s = f2_s + abs(abs(sat_fake[img][val+1]-sat_true[img][val+1]) - abs(sat_fake[img][val]-sat_true[img][val]))
+
             if(abs(hue_fake[img][val]-hue_true[img][val]) > f1_h):
                 f1_h = abs(hue_fake[img][val]-hue_true[img][val])
                 vh_h = val
@@ -68,17 +83,69 @@ def fcid_hist():
             if(abs(sat_fake[img][val]-sat_true[img][val]) > f1_s):
                 f1_s = abs(sat_fake[img][val]-sat_true[img][val])
                 vh_s = val
+        vh_sarray.append(vh_s)
+        vh_harray.append(vh_h)
 
-        per_image_vec.append(vh_s)
-        per_image_vec.append(vh_h)
-        training_vec.append(per_image_vec)
+    vh_map = max(map(lambda val: (vh_harray.count(val), val), set(vh_harray)))
+    vh_h = vh_map[1]
+    vhs_map = max(map(lambda val: (vh_sarray.count(val), val), set(vh_sarray)))
+    vh_s = vhs_map[1]
 
-    print(training_vec)
+    return vh_h,vh_s
 
+def train_fcid_hist():
+    vh_h , vh_s = calculating_v_values()
+    hue_fake,hue_true,sat_fake,sat_true = hue_sat_calculation()
+    training_set = []
+    for img in range(len(hue_fake)):
+        true_image = []
+        fake_image = []
+        #First for true images
+        f1_h = hue_true[img][vh_h]
+        f1_s = sat_true[img][vh_s]
+        f2_h = 0
+        f2_s = 0 
+        for i in range(len(hue_true[img])):
+            if(i+1 != len(hue_true[img])):
+                f2_h = f2_h + abs(hue_true[img][i+1]-hue_true[img][i])
+                f2_s = f2_s + abs(sat_true[img][i+1]-sat_true[img][i])
+        true_image.append(f1_h[0])
+        true_image.append(f1_s[0])
+        true_image.append(f2_h[0])
+        true_image.append(f2_s[0])
+        true_image.append(1)
+
+        #Second for fake images
+        f1_h = hue_fake[img][vh_h]
+        f1_s = sat_fake[img][vh_s]
+        f2_h = 0
+        f2_s = 0 
+        for i in range(len(hue_fake[img])):
+            if(i+1 != len(hue_fake[img])):
+                f2_h = f2_h + abs(hue_fake[img][i+1]-hue_fake[img][i])
+                f2_s = f2_s + abs(sat_fake[img][i+1]-sat_fake[img][i])
+        fake_image.append(f1_h[0])
+        fake_image.append(f1_s[0])
+        fake_image.append(f2_h[0])
+        fake_image.append(f2_s[0])
+        fake_image.append(0)
+        training_set.append(true_image)
+        training_set.append(fake_image)
+    
+    return training_set
+
+def training():
+    train_array = train_fcid_hist()
+    tf = pd.DataFrame(train_array)
+    X = tf.iloc[0:400,0:4]
+    Y = tf.iloc[0:400,4]
+    X_test = tf.iloc[400:,0:4]
+    Y_test = tf.iloc[400:,4]
+    clf = SVC(gamma='auto')
+    clf.fit(X, Y) 
+    print(clf.score(X_test,Y_test))
+    
 
     
 
-fcid_hist()
-
-    
-
+training()

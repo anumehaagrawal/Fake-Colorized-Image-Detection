@@ -9,8 +9,6 @@ from keras.models import Sequential
 from keras.preprocessing.image import img_to_array, load_img
 from skimage.color import lab2rgb
 folder = 'n02113978'
-import autocolorize
-
 
 def load_images_from_folder():
         images = []
@@ -28,7 +26,7 @@ def lab_rgb_method():
         for img in org_images:
                 rgb_lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
                 lab_rgb = cv2.cvtColor(rgb_lab, cv2.COLOR_LAB2RGB)
-                cv2.imwrite('fake_images/'+org_names[count],lab_rgb)
+                cv2.imwrite('true_fake_images/'+org_names[count],lab_rgb)
                 count = count + 1
 
 def create_model():
@@ -74,12 +72,4 @@ def test():
         print("%s: %.2f%%" % (model.metrics_names[1], score[1]*100))
 
 
-def autocolorize():
-        images,_  = load_images_from_folder()
-        img = images[0]
-        rgb_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        classifier = autocolorize.load_default_classifier()
-        gr_rgb = autocolorize.colorize(rgb_gray, classifier=classifier)
-        cv2.imwrite('try.png',gr_rgb)
-
-autocolorize()
+lab_rgb_method()
