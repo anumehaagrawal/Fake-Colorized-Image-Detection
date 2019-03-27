@@ -5,30 +5,35 @@ import pandas as pd
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import roc_auc_score
 
+#Histogram plot for hue channel
 def hue_equalized(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv],[0],None,[200],[0,256])
-    print(hist)
     plt.plot(hist)
     plt.show()
 
+#Historgram plot for saturated channel
 def saturated_equalized(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv],[1],None,[200],[0,256])
     plt.plot(hist)
     plt.show()
 
+#Histogram values for hue channel
 def hue_distribution(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv],[0],None,[200],[0,256])
     return hist
 
+#Saturated histogram values
 def saturated_distribution(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv],[1],None,[200],[0,256])
     return hist
 
+#Dark channel values for an image
 def dark_channel(image):
     hist_r = cv2.calcHist([image],[0],None,[200],[0,256])
     hist_g = cv2.calcHist([image],[1],None,[200],[0,256])
@@ -36,9 +41,9 @@ def dark_channel(image):
     hist_final = hist_r
     for i in range(200):
         hist_final[i] = min(min(hist_r[i],hist_g[i]),hist_b[i])
-    
     return hist_final
 
+#Light channel values for an image
 def bright_channel(image):
     hist_r = cv2.calcHist([image],[0],None,[200],[0,256])
     hist_g = cv2.calcHist([image],[1],None,[200],[0,256])
@@ -50,7 +55,7 @@ def bright_channel(image):
     return hist_final
 
 
-
+#Loading images and their names into an array
 def load_images_from_folder(folder):
     images = []
     names = []
@@ -61,6 +66,7 @@ def load_images_from_folder(folder):
                     names.append(fname)
     return images,names
 
+#Calculation of feature values for an image
 def hue_sat_calculation():
     #No. of bins
     Kh = 200
@@ -88,6 +94,7 @@ def hue_sat_calculation():
 
     return hue_fake,hue_true,sat_fake,sat_true,dc_fake,dc_true, bc_fake, bc_true
 
+#calculation vh index values where divergence is the greatest
 def calculating_v_values():
     
     hue_fake,hue_true,sat_fake,sat_true,dc_fake,dc_true,bc_fake, bc_true = hue_sat_calculation()
@@ -154,6 +161,7 @@ def calculating_v_values():
 
     return vh_h,vh_s,vdc, vbc,max_hue,max_sat,max_dc,max_bc
 
+#Implement FCID-HIST algorithm
 def train_fcid_hist():
     vh_h , vh_s , vdc ,vbc, max_hue , max_sat, max_dc,max_bc = calculating_v_values()
     hue_fake,hue_true,sat_fake,sat_true, dc_fake, dc_true , bc_fake, bc_true = hue_sat_calculation()
@@ -211,6 +219,7 @@ def train_fcid_hist():
     
     return training_set
 
+#Training of SVM model
 def training():
     train_array = train_fcid_hist()
     tf = pd.DataFrame(train_array)
@@ -224,8 +233,17 @@ def training():
     clf = GridSearchCV(svc, parameters, cv=5) 
     clf.fit(X,Y)
     y_pred = clf.predict(X_test)
-    print(y_pred)
-    print(clf.score(X_test,Y_test))
+    print("Predicted output is ",y_pred)
+    print("ROC",roc_auc_score(y_pred, Y_test))
+    print("Accuracy is ",clf.score(X_test,Y_test))
     
 
+# Calling the training function
 training()
+
+
+folder_fake = 'sun6-gthist'
+fake_images,fake_names = load_images_from_folder(folder_fake)
+folder_real = 'sun6'
+real_images ,real_names = load_images_from_folder(folder_real)
+hue_equalized(fake_images[2])

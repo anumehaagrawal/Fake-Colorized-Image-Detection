@@ -105,3 +105,4 @@ venv.bak/
 
 cktest10
 *.h5
+ILSVRC2012_img_val 
