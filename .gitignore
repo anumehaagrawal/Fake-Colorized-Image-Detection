@@ -103,6 +103,6 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-cktest10
+ctest10k
 *.h5
-ILSVRC2012_img_val 
+ctest110ktrue

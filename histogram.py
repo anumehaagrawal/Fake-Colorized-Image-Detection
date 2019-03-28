@@ -1,6 +1,7 @@
 import cv2
 from matplotlib import pyplot as plt
 import os
+import time
 import pandas as pd
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
@@ -66,14 +67,52 @@ def load_images_from_folder(folder):
                     names.append(fname)
     return images,names
 
+
+def load_og_images():
+    folder_false = 'ctest10k'
+    folder_true = 'ctest110ktrue'
+    images_true = []
+    images_false = []
+    names_true = []
+    names_false = []
+    
+    fname_false = os.listdir(folder_false)
+    fname_true = os.listdir(folder_true)
+    count = 0 
+    for fname in fname_false:
+        if(count > 2500):
+            break
+        else:
+            new_name = fname.split(".")[0]+".JPEG"
+            if new_name in fname_true:
+                count = count + 1
+                imgt = cv2.imread(os.path.join(folder_true,new_name))
+                imgf = cv2.imread(os.path.join(folder_false,fname))
+                if imgt is not None:
+                    images_true.append(imgt)
+                    names_true.append(new_name)
+                if imgf is not None:
+                    images_false.append(imgf)
+                    names_false.append(fname)
+
+    return images_true,images_false,names_true,names_false
+
 #Calculation of feature values for an image
 def hue_sat_calculation():
     #No. of bins
     Kh = 200
+    
     folder_fake = 'sun6-gthist'
-    fake_images,fake_names = load_images_from_folder(folder_fake)
+    fake_images1,fake_names1 = load_images_from_folder(folder_fake)
     folder_real = 'sun6'
-    real_images ,real_names = load_images_from_folder(folder_real)
+    real_images1 ,real_names1 = load_images_from_folder(folder_real)
+    
+    real_images,fake_images,real_names,fake_names = load_og_images()
+    real_images = real_images + real_images1
+    fake_images = fake_images + fake_images1
+    real_names = real_names + real_names1
+    fake_names = fake_names + fake_names1
+
     hue_fake = []
     hue_true = []
     sat_fake = []
@@ -221,18 +260,20 @@ def train_fcid_hist():
 
 #Training of SVM model
 def training():
+
     train_array = train_fcid_hist()
     tf = pd.DataFrame(train_array)
     tf.sample(frac=1)
-    X = tf.iloc[0:400,0:6]
-    Y = tf.iloc[0:400,6]
-    X_test = tf.iloc[400:,0:6]
-    Y_test = tf.iloc[400:,6]
+    X = tf.iloc[0:2800,0:6]
+    Y = tf.iloc[0:2800,6]
+    X_test = tf.iloc[2800:,0:6]
+    Y_test = tf.iloc[2800:,6]
     parameters = {'kernel':('linear', 'rbf'), 'C':[1, 10]}
     svc = SVC(gamma="auto")
     clf = GridSearchCV(svc, parameters, cv=5) 
     clf.fit(X,Y)
     y_pred = clf.predict(X_test)
+
     print("Predicted output is ",y_pred)
     print("ROC",roc_auc_score(y_pred, Y_test))
     print("Accuracy is ",clf.score(X_test,Y_test))
