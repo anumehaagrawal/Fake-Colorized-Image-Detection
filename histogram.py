@@ -8,6 +8,110 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import roc_auc_score
 
+def inImage(img,i,j):
+    if(i>=0 and i<len(img) and j>=0 and j<len(img[0])):
+        return True
+    return False
+
+def gmm_get_phi(images):
+    phi=[]
+    for img in images:
+        h_vec=[]
+        s_vec=[]
+        bc_vec=[]
+        dc_vec=[]
+        hsv_mat=cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        # gbr_mat=cv2.cvtColor(img)
+        gbr_mat=img
+
+        #Method 1 - Use all pixel values
+        #Extract Ih, Is
+        for row in hsv_mat:
+            h_temp=[]
+            s_temp=[]
+            for hsv_trip in row:
+                h_temp.append(hsv_trip[0])
+                s_temp.append(hsv_trip[1])
+            h_vec.append(h_temp)
+            s_vec.append(s_temp)
+
+        #Extract Ibc, Idc
+        radius=1
+        for row in range(len(gbr_mat)):
+            dc_temp=[]
+            bc_temp=[]
+            for col in range(len(gbr_mat[0])):
+                min_dc=1000
+                max_bc=-1000
+                for r_row in range(-radius,radius+1):
+                    for r_col in range(-radius,radius+1):
+                        # a=1
+                        if(inImage(img,row+r_row,col+r_col)):
+                            # a=1
+                            rgb_min=min(gbr_mat[row+r_row][col+r_col][0],min(gbr_mat[row+r_row][col+r_col][1],gbr_mat[row+r_row][col+r_col][2]))
+                            if(min_dc>rgb_min):
+                                min_dc=rgb_min
+                            rgb_max=max(gbr_mat[row+r_row][col+r_col][0],max(gbr_mat[row+r_row][col+r_col][1],gbr_mat[row+r_row][col+r_col][2]))
+                            if(max_bc<rgb_max):
+                                max_bc=rgb_max
+        
+                dc_temp.append(min_dc)
+                bc_temp.append(max_bc)
+            bc_vec.append(bc_temp)
+            dc_vec.append(dc_temp)
+
+        # #Method 2 By considering averages over windows
+        # wind_size=10
+        # #Extract Ih, Is
+        # for row in range(0,len(hsv_mat),wind_size):
+        #     h_temp=[]
+        #     s_temp=[]
+        #     for col in range(0,len(hsv_mat[0]),wind_size):
+        #         avg_h=avg_s=0
+        #         count=0
+        #         for i in range(wind_size):
+        #             for j in range(wind_size):
+        #                 if(inImage(img,row+i,col+j)):
+        #                     count+=1
+        #                     avg_h+=(hsv_mat[row+i][col+j][0])
+        #                     avg_s+=(hsv_mat[row+i][col+j][1])
+        #         h_temp.append(avg_h//count)
+        #         s_temp.append(avg_s//count)
+        #     h_vec.append(h_temp)
+        #     s_vec.append(s_temp)
+        # #Extract Ibc, Idc
+        # radius=1
+        # for row_ind in range(0,len(gbr_mat),wind_size):
+        #     dc_temp=[]
+        #     bc_temp=[]
+        #     for col_ind in range(0,len(gbr_mat[0]),wind_size):
+        #         avg_bc=avg_dc=0
+        #         count=0
+        #         for i in range(wind_size):
+        #             for j in range(wind_size):
+        #                 if(inImage(img,row_ind+i,col_ind+j)):
+        #                     count+=1
+        #                     min_dc=1000
+        #                     max_bc=-1000
+        #                     row=row_ind+i
+        #                     col=col_ind+j
+        #                     for r_row in range(-radius,radius+1):
+        #                         for r_col in range(-radius,radius+1):
+        #                             if(inImage(img,row+r_row,col+r_col)):
+        #                                 rgb_min=min(img[row+r_row][col+r_col][0],min(img[row+r_row][col+r_col][1],img[row+r_row][col+r_col][2]))
+        #                                 if(min_dc>rgb_min):
+        #                                     min_dc=rgb_min
+        #                                 rgb_max=max(img[row+r_row][col+r_col][0],max(img[row+r_row][col+r_col][1],img[row+r_row][col+r_col][2]))
+        #                                 if(max_bc<rgb_max):
+        #                                     max_bc=rgb_max
+        #                     avg_bc+=(max_bc)
+        #                     avg_dc+=(min_dc)
+        #         dc_temp.append(avg_bc//count)
+        #         bc_temp.append(avg_dc//count)
+        #     bc_vec.append(bc_temp)
+        #     dc_vec.append(dc_temp)
+        phi.append([h_vec,s_vec,bc_vec,dc_vec])
+
 #Histogram plot for hue channel
 def hue_equalized(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
