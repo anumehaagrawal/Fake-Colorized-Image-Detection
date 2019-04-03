@@ -15,7 +15,26 @@ from sklearn.metrics import roc_auc_score
 import random
 # from array import data_array
 import numpy as np
+def resize_image(images_true, images_false):
+    h = []
+    w = []
+    for img in  images_true:
+        h.append(len(img))
+        w.append(len(img[0]))
 
+    for img in images_false:
+        h.append(len(img))
+        w.append(len(img[0]))
+    h_avg = mean(h)
+    w_avg = mean(w)
+    for i in  range(len(images_true)):
+        images_true[i] = resizeimage.resize_contain(images_true[i], [h_avg, w_avg])
+    for i in  range(len(images_false)):
+        images_false[i] = resizeimage.resize_contain(images_false[i], [h_avg, w_avg])
+    return images_true,images_false
+    
+
+    
 def get_gmm_dataFrame(img_type):
     phi_df=[]
     pickle_off = open("phi_"+img_type+".pickle","rb")
