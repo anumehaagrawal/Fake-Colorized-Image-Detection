@@ -1,7 +1,12 @@
 import cv2
 from matplotlib import pyplot as plt
 import os
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve
+import matplotlib.pyplot as plt
+
 import pickle
+
 import time
 import pandas as pd
 from sklearn.svm import SVC
@@ -67,6 +72,16 @@ def bright_channel(image):
     
     return hist_final
 
+def rgb(image):
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2Luv)
+    hist_r = cv2.calcHist([image],[0],None,[200],[0,256])
+    hist_g = cv2.calcHist([image],[1],None,[200],[0,256])
+    hist_b = cv2.calcHist([image],[2],None,[200],[0,256])
+    hist_final = hist_r
+    for i in range(200):
+        hist_final[i] = (hist_r[i]+hist_g[i]+hist_b[i]) /3 
+    return hist_final
+
 #Loading images and their names into an array
 def load_images_from_folder(folder):
     images = []
@@ -117,11 +132,11 @@ def hue_sat_calculation():
     folder_real = 'sun6'
     real_images ,real_names = load_images_from_folder(folder_real)
     
-    # real_images,fake_images,real_names,fake_names = load_og_images()
-    # real_images = real_images + real_images1
-    # fake_images = fake_images + fake_images1
-    # real_names = real_names + real_names1
-    # fake_names = fake_names + fake_names1
+    real_images1,fake_images1,real_names1,fake_names1 = load_og_images()
+    real_images = real_images + real_images1
+    fake_images = fake_images + fake_images1
+    real_names = real_names + real_names1
+    fake_names = fake_names + fake_names1
 
     hue_fake = []
     hue_true = []
@@ -131,6 +146,8 @@ def hue_sat_calculation():
     dc_true = []
     bc_fake = []
     bc_true = []
+    avg_true =[]
+    avg_fake =[]
     for img in range(len(fake_images)):
         hue_true.append(hue_distribution(real_images[img]))
         hue_fake.append(hue_distribution(fake_images[img]))
@@ -140,21 +157,26 @@ def hue_sat_calculation():
         dc_true.append(dark_channel(real_images[img]))
         bc_fake.append(bright_channel(fake_images[img]))
         bc_true.append(bright_channel(real_images[img]))
+        avg_fake.append(rgb(fake_images[img]))
+        avg_true.append(rgb(real_images[img]))
 
-    return hue_fake,hue_true,sat_fake,sat_true,dc_fake,dc_true, bc_fake, bc_true
+
+    return hue_fake,hue_true,sat_fake,sat_true,dc_fake,dc_true, bc_fake, bc_true,avg_fake,avg_true
 
 #calculation vh index values where divergence is the greatest
 def calculating_v_values():
     
-    hue_fake,hue_true,sat_fake,sat_true,dc_fake,dc_true,bc_fake, bc_true = hue_sat_calculation()
+    hue_fake,hue_true,sat_fake,sat_true,dc_fake,dc_true,bc_fake, bc_true,avg_fake,avg_true = hue_sat_calculation()
     vh_harray = []
     vh_sarray = []
     vdc_array = []
     vbc_array = []
+    vavg_array = []
     max_hue = -99999
     max_sat = -99999
     max_dc =  -99999
     max_bc = -99999
+    max_avg = -99999
     
     for img in range(len(hue_fake)):
         
@@ -162,11 +184,13 @@ def calculating_v_values():
         f1_s = -99999
         f1_dc = -99999
         f1_bc = -99999
+        f1_avg = -99999
         per_image_vec = []
         vh_h = -1
         vh_s = -1
         vdc = -1
         vbc = -1
+        vavg = -1
         
         for val in range(len(hue_fake[img])):
             max_hue = max(max_hue,hue_fake[img][val])
@@ -177,6 +201,8 @@ def calculating_v_values():
             max_dc = max(max_dc,dc_true[img][val])
             max_bc = max(max_bc,bc_fake[img][val])
             max_bc = max(max_bc,bc_true[img][val])
+            max_avg = max(max_avg,avg_fake[img][val])
+            max_avg = max(max_avg,avg_true[img][val])
 
             if(abs(hue_fake[img][val]-hue_true[img][val]) > f1_h):
                 f1_h = abs(hue_fake[img][val]-hue_true[img][val])
@@ -193,10 +219,14 @@ def calculating_v_values():
             if(abs(bc_fake[img][val]-bc_true[img][val]) > f1_bc):
                 f1_bc = abs(bc_fake[img][val]-bc_true[img][val])
                 vbc = val
+            if(abs(avg_fake[img][val]-avg_true[img][val]) > f1_avg):
+                f1_avg = abs(avg_fake[img][val]-avg_true[img][val])
+                vavg = val
         vh_sarray.append(vh_s)
         vh_harray.append(vh_h)
         vdc_array.append(vdc)
         vbc_array.append(vbc)
+        vavg_array.append(vavg)
 
     vh_map = max(map(lambda val: (vh_harray.count(val), val), set(vh_harray)))
     vh_h = vh_map[1]
@@ -206,14 +236,17 @@ def calculating_v_values():
     vdc = vdc_map[1]
     vbc_map = max(map(lambda val: (vbc_array.count(val), val), set(vbc_array)))
     vbc = vbc_map[1]
+    vavg_map = max(map(lambda val: (vavg_array.count(val), val), set(vavg_array)))
+    vavg = vavg_map[1]
 
 
-    return vh_h,vh_s,vdc, vbc,max_hue,max_sat,max_dc,max_bc
+
+    return vh_h,vh_s,vdc, vbc,vavg, max_hue,max_sat,max_dc,max_bc,max_avg
 
 #Implement FCID-HIST algorithm
 def train_fcid_hist():
-    vh_h , vh_s , vdc ,vbc, max_hue , max_sat, max_dc,max_bc = calculating_v_values()
-    hue_fake,hue_true,sat_fake,sat_true, dc_fake, dc_true , bc_fake, bc_true = hue_sat_calculation()
+    vh_h , vh_s , vdc ,vbc,vavg, max_hue , max_sat, max_dc,max_bc ,max_avg = calculating_v_values()
+    hue_fake,hue_true,sat_fake,sat_true, dc_fake, dc_true , bc_fake, bc_true, avg_fake, avg_true = hue_sat_calculation()
     training_set = []
     for img in range(len(hue_fake)):
         true_image = []
@@ -223,22 +256,27 @@ def train_fcid_hist():
         f1_s = sat_true[img][vh_s]
         f1_dc = dc_true[img][vdc]
         f1_bc = bc_true[img][vbc]
+        f1_avg = avg_true[img][vavg]
         f2_h = 0
         f2_s = 0 
         f2_dc = 0
         f2_bc = 0 
+        f2_avg = 0
+
         for i in range(len(hue_true[img])):
             if(i+1 != len(hue_true[img])):
                 f2_h = f2_h + abs(hue_true[img][i+1]-hue_true[img][i])
                 f2_s = f2_s + abs(sat_true[img][i+1]-sat_true[img][i])
                 f2_dc = f2_dc + abs(dc_true[img][i+1]-dc_true[img][i])
                 f2_bc = f2_bc + abs(bc_true[img][i+1]-bc_true[img][i])
+                f2_avg = f2_avg + abs(avg_true[img][i+1]- avg_true[img][i])
         true_image.append(f1_h[0]/max_hue)
         true_image.append(f1_s[0]/max_sat)
         true_image.append(f2_h[0]/max_hue)
         true_image.append(f2_s[0]/max_sat)
         true_image.append(f2_dc[0]/max_dc)
         true_image.append(f2_bc[0]/max_bc)
+        true_image.append(f2_avg[0]/max_avg)
         true_image.append(1)
 
         #Second for fake images
@@ -246,22 +284,26 @@ def train_fcid_hist():
         f1_s = sat_fake[img][vh_s]
         f1_dc = dc_fake[img][vdc]
         f1_bc = bc_fake[img][vbc]
+        f1_avg = avg_fake[img][vbc]
         f2_h = 0
         f2_s = 0 
         f2_dc = 0
         f2_bc = 0
+        f2_avg = 0
         for i in range(len(hue_fake[img])):
             if(i+1 != len(hue_fake[img])):
                 f2_h = f2_h + abs(hue_fake[img][i+1]-hue_fake[img][i])
                 f2_s = f2_s + abs(sat_fake[img][i+1]-sat_fake[img][i])
                 f2_dc = f2_dc + abs(dc_fake[img][i+1]-dc_fake[img][i])
                 f2_bc = f2_bc + abs(bc_fake[img][i+1]-bc_fake[img][i])
+                f2_avg = f2_avg + abs(avg_fake[img][i+1]-avg_fake[img][i])
         fake_image.append(f1_h[0]/max_hue)
         fake_image.append(f1_s[0]/max_sat)
         fake_image.append(f2_h[0]/max_hue)
         fake_image.append(f2_s[0]/max_sat)
         fake_image.append(f2_dc[0]/max_dc)
         fake_image.append(f2_bc[0]/max_bc)
+        fake_image.append(f2_avg[0]/max_avg)
         fake_image.append(0)
         training_set.append(true_image)
         training_set.append(fake_image)
@@ -276,16 +318,19 @@ def training():
     print("Df dimension",tf.shape)
 
     tf.sample(frac=1)
-    X = tf.iloc[0:380,0:6]
-    Y = tf.iloc[0:380,6]
-    X_test = tf.iloc[380:,0:6]
-    Y_test = tf.iloc[380:,6]
+    X = tf.iloc[0:2000,0:7]
+    Y = tf.iloc[0:2000,7]
+    X_test = tf.iloc[2000:,0:7]
+    Y_test = tf.iloc[2000:,7]
     parameters = {'kernel':('linear', 'rbf'), 'C':[1, 10]}
     svc = SVC(gamma="auto")
     clf = GridSearchCV(svc, parameters, cv=5) 
     clf.fit(X,Y)
     y_pred = clf.predict(X_test)
-
+    fpr, tpr, _ = roc_curve(Y_test,  y_pred)
+    auc = roc_auc_score(Y_test, y_pred)
+    plt.plot(fpr,tpr,label="data 1, auc="+str(auc))
+    plt.show()
     print("Predicted output is ",y_pred)
     print("ROC",roc_auc_score(y_pred, Y_test))
     print("Accuracy is ",clf.score(X_test,Y_test))
